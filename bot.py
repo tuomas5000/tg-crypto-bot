@@ -3,7 +3,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 # Aseta oma bottitoken tähän
-BOT_TOKEN = "PASTE_YOUR_BOT_TOKEN_HERE"
+BOT_TOKEN = 7641332805:AAHGY72sprc3knPtysb3oWpFxE9oC1ndHUo
 
 # Loggeri, että nähdään virheet Renderissä
 logging.basicConfig(
