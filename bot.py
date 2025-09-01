@@ -1,47 +1,93 @@
-import logging
+import os
+import time
+import threading
+import requests
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-# Oikea bottitoken lainausmerkkien sisällä
-BOT_TOKEN = "7641332805:AAHGY72sprc3knPtysb3oWpFxE9oC1ndHUo"
+# Ympäristömuuttujat
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHANNEL_ID = os.getenv("CHANNEL_ID")
 
-# Loggeri virheiden seuraamiseen
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO
-)
+# Parametrit
+hours_window = 1
+top_percent = 5
 
-# /start-komento
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# Telegram-botin alustus
+app = Application.builder().token(BOT_TOKEN).build()
+
+# ----- Komennot -----
+async def test_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("✅ Testiviesti: botti vastaa komentoihin.")
+
+async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Hei! Olen toiminnassa ✅ Käytä /commands nähdäksesi komennot."
+        f"ℹ️ Parametrit nyt:\nAikaväli: {hours_window}h\nTop %: {top_percent}"
     )
 
-# /test-komento
-async def test(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Testiviesti toimii! ✅")
+async def set_hours_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global hours_window
+    try:
+        value = int(context.args[0])
+        hours_window = value
+        await update.message.reply_text(f"✅ Aikaväli asetettu: {hours_window}h")
+    except Exception:
+        await update.message.reply_text("⚠️ Käyttö: /set_hours <tunnit>")
 
-# /commands-komento
-async def commands(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    cmd_list = (
-        "📋 Käytettävissä olevat komennot:\n\n"
-        "/start - Käynnistää botin\n"
-        "/test - Testaa vastaako botti\n"
-        "/commands - Näytä tämä komentolista\n"
-    )
-    await update.message.reply_text(cmd_list)
+async def set_top_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global top_percent
+    try:
+        value = int(context.args[0])
+        top_percent = value
+        await update.message.reply_text(f"✅ Top % asetettu: {top_percent}")
+    except Exception:
+        await update.message.reply_text("⚠️ Käyttö: /set_top_percent <prosentti>")
 
-def main():
-    app = Application.builder().token(BOT_TOKEN).build()
+# ----- Taustasilmukka -----
+def fetch_new_tokens():
+    try:
+        url = "https://public-api.solscan.io/token/list?sortBy=createdBlock&direction=desc&limit=5"
+        r = requests.get(url, timeout=10)
+        if r.status_code == 200:
+            return r.json()
+        else:
+            print("Virhe uusien tokenien haussa:", r.text)
+            return []
+    except Exception as e:
+        print("Virhe uusien tokenien haussa:", e)
+        return []
 
-    # Rekisteröidään komennot
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("test", test))
-    app.add_handler(CommandHandler("commands", commands))
+def signal_loop():
+    while True:
+        try:
+            tokens = fetch_new_tokens()
+            if not tokens:
+                print("Ei uusia tokeneita tällä kierroksella.")
+            else:
+                text = "📊 Uudet tokenit Solanassa:\n"
+                for t in tokens:
+                    text += f"- {t.get('symbol', 'N/A')} ({t.get('tokenAddress', '')})\n"
+                app.bot.send_message(chat_id=CHANNEL_ID, text=text)
+        except Exception as e:
+            print("Virhe signal_loopissa:", e)
 
-    # Käynnistetään polling yhdellä instanssilla, vanhat viestit pudotetaan
-    app.run_polling(drop_pending_updates=True)
+        time.sleep(hours_window * 3600)
 
+def start_background_tasks():
+    thread = threading.Thread(target=signal_loop, daemon=True)
+    thread.start()
+
+# ----- Main -----
 if __name__ == "__main__":
-    main()
+    # Lisää komennot
+    app.add_handler(CommandHandler("test", test_command))
+    app.add_handler(CommandHandler("status", status_command))
+    app.add_handler(CommandHandler("set_hours", set_hours_command))
+    app.add_handler(CommandHandler("set_top_percent", set_top_command))
 
+    # Käynnistä taustasäie
+    start_background_tasks()
+
+    # Käynnistä botti (komennot)
+    print("Botti käynnissä...")
+    app.run_polling()
