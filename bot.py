@@ -2,7 +2,7 @@ import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-# Oikea bottitoken
+# Oikea bottitoken, lainausmerkkien sisällä
 BOT_TOKEN = "7641332805:AAHGY72sprc3knPtysb3oWpFxE9oC1ndHUo"
 
 # Loggeri virheiden seuraamiseen
