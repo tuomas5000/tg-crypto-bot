@@ -7,7 +7,8 @@ BOT_TOKEN = "PASTE_YOUR_BOT_TOKEN_HERE"
 
 # Loggeri, että nähdään virheet Renderissä
 logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO
 )
 
 # /start -komento
