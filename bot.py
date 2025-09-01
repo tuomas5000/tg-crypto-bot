@@ -14,7 +14,7 @@ bot = Bot(token=TOKEN)
 
 # --- Parametrit ---
 hours = 1
-top_percent = 5  # oletus 5%
+top_percent = 5
 
 SOLSCAN_NEW_TOKENS = "https://public-api.solscan.io/v1/token/new"
 SOLSCAN_TOKEN_TXS = "https://public-api.solscan.io/v1/token/txs"
@@ -42,11 +42,11 @@ async def status(update: ContextTypes.DEFAULT_TYPE, context: ContextTypes.DEFAUL
 async def send_test_message(update: ContextTypes.DEFAULT_TYPE, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("✅ Testiviesti: botti toimii ja Telegram-yhteys OK!")
 
-# --- Solscan tokenit ---
+# --- Solscan ---
 def fetch_new_tokens():
     tokens = []
     try:
-        response = requests.get(SOLSCAN_NEW_TOKENS, headers=HEADERS)
+        response = requests.get(SOLSCAN_NEW_TOKENS, headers=HEADERS, timeout=10)
         data = response.json()
         for token in data.get("data", []):
             if token.get("market_cap_usd", 1_000_001) < 10_000_000:
@@ -63,7 +63,7 @@ def fetch_new_tokens():
 def count_buyers(token_address, hours_param):
     try:
         params = {"token": token_address, "limit": 100}
-        response = requests.get(SOLSCAN_TOKEN_TXS, headers=HEADERS, params=params)
+        response = requests.get(SOLSCAN_TOKEN_TXS, headers=HEADERS, params=params, timeout=10)
         data = response.json().get("data", [])
         unique_buyers = set()
         cutoff = datetime.utcnow() - timedelta(hours=hours_param)
@@ -119,11 +119,9 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("test", send_test_message))
 
-    # Async pääfunktio Renderille
-    async def main():
-        # Käynnistä taustasilmukka
-        asyncio.create_task(signal_loop())
-        # Käynnistä Telegram-polling
-        await app.run_polling()
+    # Käynnistä taustasilmukka suoraan nykyisessä loopissa
+    loop = asyncio.get_event_loop()
+    loop.create_task(signal_loop())
 
-    asyncio.run(main())
+    # Käynnistä Telegram polling synkronisesti
+    app.run_polling()
