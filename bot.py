@@ -2,26 +2,26 @@ import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-# Aseta oma bottitoken tähän
-BOT_TOKEN = 7641332805:AAHGY72sprc3knPtysb3oWpFxE9oC1ndHUo
+# Oikea bottitoken
+BOT_TOKEN = "7641332805:AAHGY72sprc3knPtysb3oWpFxE9oC1ndHUo"
 
-# Loggeri, että nähdään virheet Renderissä
+# Loggeri virheiden seuraamiseen
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO
 )
 
-# /start -komento
+# /start-komento
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Hei! Olen toiminnassa ✅ Käytä /commands nähdäksesi komennot."
     )
 
-# /test -komento
+# /test-komento
 async def test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Testiviesti toimii! ✅")
 
-# /commands -komento
+# /commands-komento
 async def commands(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cmd_list = (
         "📋 Käytettävissä olevat komennot:\n\n"
@@ -39,7 +39,7 @@ def main():
     app.add_handler(CommandHandler("test", test))
     app.add_handler(CommandHandler("commands", commands))
 
-    # Käynnistetään polling yhdellä instanssilla, pudotetaan vanhat viestit
+    # Käynnistetään polling yhdellä instanssilla, vanhat viestit pudotetaan
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
