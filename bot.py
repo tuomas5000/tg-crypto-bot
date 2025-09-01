@@ -117,10 +117,8 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("set_top_percent", set_top_percent))
     app.add_handler(CommandHandler("status", status))
 
-    # Käynnistä taustasilmukka erillisessä loopissa
-    loop = asyncio.get_event_loop()
-    loop.create_task(signal_loop())
+    # Käynnistä taustasilmukka ilman DeprecationWarning
+    asyncio.create_task(signal_loop())
     
     # Käynnistä Telegram bot polling
     app.run_polling()
-
