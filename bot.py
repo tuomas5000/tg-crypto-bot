@@ -113,18 +113,27 @@ async def signal_loop():
 if __name__ == "__main__":
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # Telegram-komennot
+    # Komennot
     app.add_handler(CommandHandler("set_hours", set_hours))
     app.add_handler(CommandHandler("set_top_percent", set_top_percent))
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("test", send_test_message))
 
-    # Käynnistä taustatehtävä heti pollingin alkaessa
-    async def start_signal_loop(application):
-        asyncio.create_task(signal_loop())
+    # Käynnistä signaaliloop heti ennen run_polling
+    # Tämä luo oman taskin nykyiseen event loopiin
+    async def start_background():
+        while True:
+            await send_signal_message()
+            await asyncio.sleep(3600)
 
-    # Liitetään post_init callbackiin
-    app.post_init(start_signal_loop)
+    # Käynnistä taustatehtävä erillisessä threadissa tai luodaan loop manuaalisesti
+    import threading
+    def run_background_loop():
+        new_loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(new_loop)
+        new_loop.run_until_complete(start_background())
 
-    # Käynnistä polling normaalisti ilman ylimääräisiä argumentteja
+    threading.Thread(target=run_background_loop, daemon=True).start()
+
+    # Käynnistä Telegram polling normaalisti
     app.run_polling()
