@@ -7,12 +7,10 @@ from telegram.ext import Application, CommandHandler, ContextTypes
 
 # Ympäristömuuttujat
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHANNEL_ID = os.getenv("CHANNEL_ID")
+CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 
-if BOT_TOKEN is None or CHANNEL_ID is None:
+if not BOT_TOKEN or not CHANNEL_ID:
     raise ValueError("BOT_TOKEN tai CHANNEL_ID ei ole määritelty ympäristömuuttujissa!")
-
-CHANNEL_ID = int(CHANNEL_ID)
 
 # Parametrit
 hours_window = 1
@@ -48,10 +46,15 @@ async def set_top_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await update.message.reply_text("⚠️ Käyttö: /set_top_percent <prosentti>")
 
-# Lisätty /commands-komento
+# /commands komento
 async def commands_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    commands_list = "/test\n/status\n/set_hours\n/set_top_percent"
-    await update.message.reply_text(f"📋 Saatavilla olevat komennot:\n{commands_list}")
+    cmds = [
+        "/test",
+        "/status",
+        "/set_hours",
+        "/set_top_percent"
+    ]
+    await update.message.reply_text("📄 Käytettävissä olevat komennot:\n" + "\n".join(cmds))
 
 # ----- Taustasilmukka -----
 def fetch_new_tokens():
@@ -80,12 +83,23 @@ def signal_loop():
                 app.bot.send_message(chat_id=CHANNEL_ID, text=text)
         except Exception as e:
             print("Virhe signal_loopissa:", e)
-
         time.sleep(hours_window * 3600)
 
 def start_background_tasks():
     thread = threading.Thread(target=signal_loop, daemon=True)
     thread.start()
+
+# ----- Webhookin poisto ennen pollingia -----
+def remove_webhook(token):
+    try:
+        url = f"https://api.telegram.org/bot{token}/deleteWebhook"
+        r = requests.post(url)
+        if r.status_code == 200:
+            print("Webhook poistettu onnistuneesti.")
+        else:
+            print("Webhookin poisto epäonnistui:", r.text)
+    except Exception as e:
+        print("Virhe webhookin poiston yhteydessä:", e)
 
 # ----- Main -----
 if __name__ == "__main__":
@@ -94,11 +108,14 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("set_hours", set_hours_command))
     app.add_handler(CommandHandler("set_top_percent", set_top_command))
-    app.add_handler(CommandHandler("commands", commands_command))  # <- uusi
+    app.add_handler(CommandHandler("commands", commands_command))
 
     # Käynnistä taustasäie
     start_background_tasks()
 
+    # Poista webhook, jotta ei tule conflict-virhettä
+    remove_webhook(BOT_TOKEN)
+
     # Käynnistä botti (komennot)
     print("Botti käynnissä...")
-    app.run_polling()
+    app.run_polling(drop_pending_updates=True)
