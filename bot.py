@@ -1,11 +1,11 @@
 import os
 import time
+import threading
 import requests
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
-import asyncio
 
-# ----- Ympäristömuuttujat -----
+# Ympäristömuuttujat
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = os.getenv("CHANNEL_ID")
 
@@ -14,11 +14,11 @@ if BOT_TOKEN is None or CHANNEL_ID is None:
 
 CHANNEL_ID = int(CHANNEL_ID)
 
-# ----- Parametrit -----
+# Parametrit
 hours_window = 1
 top_percent = 5
 
-# ----- Telegram-botin alustus -----
+# Telegram-botin alustus
 app = Application.builder().token(BOT_TOKEN).build()
 
 # ----- Komennot -----
@@ -48,17 +48,6 @@ async def set_top_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await update.message.reply_text("⚠️ Käyttö: /set_top_percent <prosentti>")
 
-async def commands_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    cmd_list = (
-        "📋 Käytettävissä olevat komennot:\n\n"
-        "/test - Testaa botin toimivuus\n"
-        "/status - Näytä nykyiset parametrit\n"
-        "/set_hours <tunnit> - Aseta taustasilmukan aikaväli\n"
-        "/set_top_percent <prosentti> - Aseta top % arvo\n"
-        "/commands - Näytä tämä lista\n"
-    )
-    await update.message.reply_text(cmd_list)
-
 # ----- Taustasilmukka -----
 def fetch_new_tokens():
     try:
@@ -73,7 +62,7 @@ def fetch_new_tokens():
         print("Virhe uusien tokenien haussa:", e)
         return []
 
-async def signal_loop_async():
+def signal_loop():
     while True:
         try:
             tokens = fetch_new_tokens()
@@ -83,27 +72,27 @@ async def signal_loop_async():
                 text = "📊 Uudet tokenit Solanassa:\n"
                 for t in tokens:
                     text += f"- {t.get('symbol', 'N/A')} ({t.get('tokenAddress', '')})\n"
-                await app.bot.send_message(chat_id=CHANNEL_ID, text=text)
+                app.bot.send_message(chat_id=CHANNEL_ID, text=text)
         except Exception as e:
             print("Virhe signal_loopissa:", e)
 
-        await asyncio.sleep(hours_window * 3600)
+        time.sleep(hours_window * 3600)
+
+def start_background_tasks():
+    thread = threading.Thread(target=signal_loop, daemon=True)
+    thread.start()
 
 # ----- Main -----
-async def main():
+if __name__ == "__main__":
     # Lisää komennot
     app.add_handler(CommandHandler("test", test_command))
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("set_hours", set_hours_command))
     app.add_handler(CommandHandler("set_top_percent", set_top_command))
-    app.add_handler(CommandHandler("commands", commands_command))
 
-    # Käynnistä taustatehtävä
-    asyncio.create_task(signal_loop_async())
+    # Käynnistä taustasäie
+    start_background_tasks()
 
-    # Käynnistä botti
+    # Käynnistä botti (komennot)
     print("Botti käynnissä...")
-    await app.run_polling(drop_pending_updates=True)
-
-if __name__ == "__main__":
-    asyncio.run(main())
+    app.run_polling()
