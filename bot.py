@@ -57,7 +57,8 @@ def main():
     async def on_startup():
         asyncio.create_task(signal_loop(app))
 
-    app.run_polling()
+  app.run_polling(drop_pending_updates=True)
+
 
 if __name__ == "__main__":
     main()
