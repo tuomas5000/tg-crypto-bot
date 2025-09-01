@@ -48,7 +48,6 @@ async def set_top_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await update.message.reply_text("⚠️ Käyttö: /set_top_percent <prosentti>")
 
-# ----- /commands-komento -----
 async def commands_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cmd_list = (
         "📋 Käytettävissä olevat komennot:\n\n"
@@ -90,11 +89,8 @@ async def signal_loop_async():
 
         await asyncio.sleep(hours_window * 3600)
 
-def start_background_tasks():
-    app.create_task(signal_loop_async())
-
 # ----- Main -----
-if __name__ == "__main__":
+async def main():
     # Lisää komennot
     app.add_handler(CommandHandler("test", test_command))
     app.add_handler(CommandHandler("status", status_command))
@@ -102,9 +98,12 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("set_top_percent", set_top_command))
     app.add_handler(CommandHandler("commands", commands_command))
 
-    # Käynnistä taustasäie
-    start_background_tasks()
+    # Käynnistä taustatehtävä
+    asyncio.create_task(signal_loop_async())
 
     # Käynnistä botti
     print("Botti käynnissä...")
-    app.run_polling(drop_pending_updates=True)
+    await app.run_polling(drop_pending_updates=True)
+
+if __name__ == "__main__":
+    asyncio.run(main())
