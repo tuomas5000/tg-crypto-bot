@@ -1,139 +1,93 @@
 import os
-import asyncio
+import time
+import threading
 import requests
-from telegram import Bot
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-from datetime import datetime, timedelta
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
 
-# --- Telegram ---
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
-SOLSCAN_API_KEY = os.getenv("SOLSCAN_API_KEY")
-HEADERS = {"token": SOLSCAN_API_KEY}
-bot = Bot(token=TOKEN)
+# Ympäristömuuttujat
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHANNEL_ID = os.getenv("CHANNEL_ID")
 
-# --- Parametrit ---
-hours = 1
+# Parametrit
+hours_window = 1
 top_percent = 5
 
-SOLSCAN_NEW_TOKENS = "https://public-api.solscan.io/v1/token/new"
-SOLSCAN_TOKEN_TXS = "https://public-api.solscan.io/v1/token/txs"
+# Telegram-botin alustus
+app = Application.builder().token(BOT_TOKEN).build()
 
-# --- Telegram-komennot ---
-async def set_hours(update: ContextTypes.DEFAULT_TYPE, context: ContextTypes.DEFAULT_TYPE):
-    global hours
-    if context.args:
-        hours = int(context.args[0])
-        await update.message.reply_text(f"✅ Aikaväli asetettu {hours} tunniksi")
-    else:
-        await update.message.reply_text("Käyttö: /set_hours <tunnit>")
+# ----- Komennot -----
+async def test_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("✅ Testiviesti: botti vastaa komentoihin.")
 
-async def set_top_percent(update: ContextTypes.DEFAULT_TYPE, context: ContextTypes.DEFAULT_TYPE):
+async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        f"ℹ️ Parametrit nyt:\nAikaväli: {hours_window}h\nTop %: {top_percent}"
+    )
+
+async def set_hours_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global hours_window
+    try:
+        value = int(context.args[0])
+        hours_window = value
+        await update.message.reply_text(f"✅ Aikaväli asetettu: {hours_window}h")
+    except Exception:
+        await update.message.reply_text("⚠️ Käyttö: /set_hours <tunnit>")
+
+async def set_top_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global top_percent
-    if context.args:
-        top_percent = int(context.args[0])
-        await update.message.reply_text(f"✅ Top-prosentti asetettu {top_percent}%")
-    else:
-        await update.message.reply_text("Käyttö: /set_top_percent <prosentti>")
+    try:
+        value = int(context.args[0])
+        top_percent = value
+        await update.message.reply_text(f"✅ Top % asetettu: {top_percent}")
+    except Exception:
+        await update.message.reply_text("⚠️ Käyttö: /set_top_percent <prosentti>")
 
-async def status(update: ContextTypes.DEFAULT_TYPE, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(f"🛠 Nykyiset parametrit:\nAikaväli: {hours}h\nTop-prosentti: {top_percent}%")
-
-async def send_test_message(update: ContextTypes.DEFAULT_TYPE, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("✅ Testiviesti: botti toimii ja Telegram-yhteys OK!")
-
-# --- Solscan ---
+# ----- Taustasilmukka -----
 def fetch_new_tokens():
-    tokens = []
     try:
-        response = requests.get(SOLSCAN_NEW_TOKENS, headers=HEADERS, timeout=10)
-        data = response.json()
-        for token in data.get("data", []):
-            if token.get("market_cap_usd", 1_000_001) < 10_000_000:
-                tokens.append({
-                    "name": token["tokenName"],
-                    "symbol": token["symbol"],
-                    "market_cap": token.get("market_cap_usd", "n/a"),
-                    "address": token["tokenAddress"]
-                })
+        url = "https://public-api.solscan.io/token/list?sortBy=createdBlock&direction=desc&limit=5"
+        r = requests.get(url, timeout=10)
+        if r.status_code == 200:
+            return r.json()
+        else:
+            print("Virhe uusien tokenien haussa:", r.text)
+            return []
     except Exception as e:
-        print(f"Virhe uusien tokenien haussa: {e}")
-    return tokens
+        print("Virhe uusien tokenien haussa:", e)
+        return []
 
-def count_buyers(token_address, hours_param):
-    try:
-        params = {"token": token_address, "limit": 100}
-        response = requests.get(SOLSCAN_TOKEN_TXS, headers=HEADERS, params=params, timeout=10)
-        data = response.json().get("data", [])
-        unique_buyers = set()
-        cutoff = datetime.utcnow() - timedelta(hours=hours_param)
-        for tx in data:
-            ts = datetime.utcfromtimestamp(tx["blockTime"])
-            if ts > cutoff and tx["amount"] > 0:
-                unique_buyers.add(tx["from"])
-        return len(unique_buyers)
-    except Exception as e:
-        print(f"Virhe ostajien laskennassa: {e}")
-        return 0
-
-async def send_signal_message():
-    tokens = fetch_new_tokens()
-    buyer_counts = []
-
-    for token in tokens:
-        buyers = count_buyers(token["address"], hours)
-        token["buyers"] = buyers
-        buyer_counts.append(buyers)
-
-    if not buyer_counts:
-        print("Ei ostotietoja tällä kierroksella.")
-        return
-
-    threshold_index = max(0, int(len(buyer_counts)*(top_percent/100))-1)
-    threshold = max(1, sorted(buyer_counts, reverse=True)[threshold_index])
-
-    for token in tokens:
-        if token["buyers"] >= threshold:
-            msg = (f"🚀 Top token: {token['name']} ({token['symbol']})\n"
-                   f"Market cap: {token['market_cap']}\n"
-                   f"Ostajia viime {hours}h aikana: {token['buyers']}\n"
-                   f"Address: {token['address']}")
-            try:
-                await bot.send_message(chat_id=CHANNEL_ID, text=msg)
-                print(f"Lähetetty top token: {token['name']}")
-            except Exception as e:
-                print(f"Virhe viestin lähetyksessä: {e}")
-
-async def signal_loop():
+def signal_loop():
     while True:
-        await send_signal_message()
-        await asyncio.sleep(3600)  # 1h välein
+        try:
+            tokens = fetch_new_tokens()
+            if not tokens:
+                print("Ei uusia tokeneita tällä kierroksella.")
+            else:
+                text = "📊 Uudet tokenit Solanassa:\n"
+                for t in tokens:
+                    text += f"- {t.get('symbol', 'N/A')} ({t.get('tokenAddress', '')})\n"
+                app.bot.send_message(chat_id=CHANNEL_ID, text=text)
+        except Exception as e:
+            print("Virhe signal_loopissa:", e)
 
-# --- Main ---
+        time.sleep(hours_window * 3600)
+
+def start_background_tasks():
+    thread = threading.Thread(target=signal_loop, daemon=True)
+    thread.start()
+
+# ----- Main -----
 if __name__ == "__main__":
-    app = ApplicationBuilder().token(TOKEN).build()
+    # Lisää komennot
+    app.add_handler(CommandHandler("test", test_command))
+    app.add_handler(CommandHandler("status", status_command))
+    app.add_handler(CommandHandler("set_hours", set_hours_command))
+    app.add_handler(CommandHandler("set_top_percent", set_top_command))
 
-    # Komennot
-    app.add_handler(CommandHandler("set_hours", set_hours))
-    app.add_handler(CommandHandler("set_top_percent", set_top_percent))
-    app.add_handler(CommandHandler("status", status))
-    app.add_handler(CommandHandler("test", send_test_message))
+    # Käynnistä taustasäie
+    start_background_tasks()
 
-    # Käynnistä signaaliloop heti ennen run_polling
-    # Tämä luo oman taskin nykyiseen event loopiin
-    async def start_background():
-        while True:
-            await send_signal_message()
-            await asyncio.sleep(3600)
-
-    # Käynnistä taustatehtävä erillisessä threadissa tai luodaan loop manuaalisesti
-    import threading
-    def run_background_loop():
-        new_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(new_loop)
-        new_loop.run_until_complete(start_background())
-
-    threading.Thread(target=run_background_loop, daemon=True).start()
-
-    # Käynnistä Telegram polling normaalisti
+    # Käynnistä botti (komennot)
+    print("Botti käynnissä...")
     app.run_polling()
