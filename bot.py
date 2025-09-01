@@ -113,15 +113,18 @@ async def signal_loop():
 if __name__ == "__main__":
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # Komennot
+    # Telegram-komennot
     app.add_handler(CommandHandler("set_hours", set_hours))
     app.add_handler(CommandHandler("set_top_percent", set_top_percent))
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("test", send_test_message))
 
-    # Käynnistä signal_loop event loopin sisällä
-    async def on_startup(app):
+    # Käynnistä polling ja taustatehtävä event loopissa
+    async def main():
+        # Käynnistä taustasilmukka
         asyncio.create_task(signal_loop())
+        # Käynnistä Telegram-polling
+        await app.run_polling()
 
-    # Käynnistä Telegram polling + taustatehtävä
-    app.run_polling(on_startup=on_startup)
+    # Käynnistä koko sovellus
+    asyncio.run(main())
