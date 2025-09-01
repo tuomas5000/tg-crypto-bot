@@ -12,7 +12,9 @@ logging.basicConfig(
 
 # /start -komento
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Hei! Olen toiminnassa ✅ Käytä /commands nähdäksesi komennot.")
+    await update.message.reply_text(
+        "Hei! Olen toiminnassa ✅ Käytä /commands nähdäksesi komennot."
+    )
 
 # /test -komento
 async def test(update: Update, context: ContextTypes.DEFAULT_TYPE):
