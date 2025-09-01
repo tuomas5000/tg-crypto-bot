@@ -59,7 +59,8 @@ async def commands_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ----- Taustasilmukka -----
 def fetch_new_tokens():
     try:
-        url = "https://public-api.solscan.io/token/list?sortBy=createdBlock&direction=desc&limit=5"
+        # Hae uusimmat tokenit SolScan API:sta
+        url = "https://public-api.solscan.io/token/list?sortBy=createdBlock&direction=desc&limit=10"
         r = requests.get(url, timeout=10)
         if r.status_code == 200:
             return r.json()
@@ -70,6 +71,20 @@ def fetch_new_tokens():
         print("Virhe uusien tokenien haussa:", e)
         return []
 
+def fetch_token_holders(token_address):
+    try:
+        url = f"https://public-api.solscan.io/account/tokens?tokenAddress={token_address}&limit=100"
+        r = requests.get(url, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            # Palautetaan holderien määrä
+            return len(data.get("data", []))
+        else:
+            return 0
+    except Exception as e:
+        print("Virhe tokenin holderien haussa:", e)
+        return 0
+
 def signal_loop():
     while True:
         try:
@@ -77,12 +92,27 @@ def signal_loop():
             if not tokens:
                 print("Ei uusia tokeneita tällä kierroksella.")
             else:
-                text = "📊 Uudet tokenit Solanassa:\n"
+                # Lasketaan ostajien määrä jokaiselle tokenille
+                token_info = []
                 for t in tokens:
-                    text += f"- {t.get('symbol', 'N/A')} ({t.get('tokenAddress', '')})\n"
+                    symbol = t.get("symbol", "N/A")
+                    address = t.get("tokenAddress", "")
+                    holders = fetch_token_holders(address)
+                    token_info.append({"symbol": symbol, "address": address, "holders": holders})
+
+                # Järjestä top % ostajien määrän mukaan
+                token_info.sort(key=lambda x: x["holders"], reverse=True)
+                top_count = max(1, len(token_info) * top_percent // 100)
+                top_tokens = token_info[:top_count]
+
+                # Lähetä viesti Telegramiin
+                text = f"📊 Top {top_percent}% uusista tokeneista Solanassa:\n"
+                for t in top_tokens:
+                    text += f"- {t['symbol']} ({t['address']}), holders: {t['holders']}\n"
                 app.bot.send_message(chat_id=CHANNEL_ID, text=text)
         except Exception as e:
             print("Virhe signal_loopissa:", e)
+
         time.sleep(hours_window * 3600)
 
 def start_background_tasks():
