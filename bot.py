@@ -119,12 +119,11 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("test", send_test_message))
 
-    # Käynnistä polling ja taustatehtävä event loopissa
+    # Async pääfunktio Renderille
     async def main():
         # Käynnistä taustasilmukka
         asyncio.create_task(signal_loop())
         # Käynnistä Telegram-polling
         await app.run_polling()
 
-    # Käynnistä koko sovellus
     asyncio.run(main())
