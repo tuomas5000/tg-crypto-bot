@@ -1,13 +1,13 @@
 import os
 import time
-import threading
 import requests
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
+import asyncio
 
 # Ympäristömuuttujat
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHANNEL_ID = os.getenv("CHANNEL_ID")
+CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 
 # Parametrit
 hours_window = 1
@@ -43,6 +43,18 @@ async def set_top_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await update.message.reply_text("⚠️ Käyttö: /set_top_percent <prosentti>")
 
+# ----- /commands-komento -----
+async def commands_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    cmd_list = (
+        "📋 Käytettävissä olevat komennot:\n\n"
+        "/test - Testaa botin toimivuus\n"
+        "/status - Näytä nykyiset parametrit\n"
+        "/set_hours <tunnit> - Aseta taustasilmukan aikaväli\n"
+        "/set_top_percent <prosentti> - Aseta top % arvo\n"
+        "/commands - Näytä tämä listaus\n"
+    )
+    await update.message.reply_text(cmd_list)
+
 # ----- Taustasilmukka -----
 def fetch_new_tokens():
     try:
@@ -57,7 +69,7 @@ def fetch_new_tokens():
         print("Virhe uusien tokenien haussa:", e)
         return []
 
-def signal_loop():
+async def signal_loop_async():
     while True:
         try:
             tokens = fetch_new_tokens()
@@ -67,15 +79,14 @@ def signal_loop():
                 text = "📊 Uudet tokenit Solanassa:\n"
                 for t in tokens:
                     text += f"- {t.get('symbol', 'N/A')} ({t.get('tokenAddress', '')})\n"
-                app.bot.send_message(chat_id=CHANNEL_ID, text=text)
+                await app.bot.send_message(chat_id=CHANNEL_ID, text=text)
         except Exception as e:
             print("Virhe signal_loopissa:", e)
 
-        time.sleep(hours_window * 3600)
+        await asyncio.sleep(hours_window * 3600)
 
 def start_background_tasks():
-    thread = threading.Thread(target=signal_loop, daemon=True)
-    thread.start()
+    app.create_task(signal_loop_async())
 
 # ----- Main -----
 if __name__ == "__main__":
@@ -84,10 +95,11 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("set_hours", set_hours_command))
     app.add_handler(CommandHandler("set_top_percent", set_top_command))
+    app.add_handler(CommandHandler("commands", commands_command))
 
     # Käynnistä taustasäie
     start_background_tasks()
 
-    # Käynnistä botti (komennot)
+    # Käynnistä botti
     print("Botti käynnissä...")
-    app.run_polling()
+    app.run_polling(drop_pending_updates=True)
