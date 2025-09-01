@@ -14,7 +14,7 @@ bot = Bot(token=TOKEN)
 
 # --- Parametrit, joita voi säätää Telegramin kautta ---
 hours = 1
-top_percent = 1
+top_percent = 5  # oletus 5%
 
 SOLSCAN_NEW_TOKENS = "https://public-api.solscan.io/v1/token/new"
 SOLSCAN_TOKEN_TXS = "https://public-api.solscan.io/v1/token/txs"
@@ -38,6 +38,9 @@ async def set_top_percent(update: ContextTypes.DEFAULT_TYPE, context: ContextTyp
 
 async def status(update: ContextTypes.DEFAULT_TYPE, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"🛠 Nykyiset parametrit:\nAikaväli: {hours}h\nTop-prosentti: {top_percent}%")
+
+async def send_test_message(update: ContextTypes.DEFAULT_TYPE, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("✅ Testiviesti: botti toimii ja Telegram-yhteys OK!")
 
 # --- Hae uudet tokenit ---
 def fetch_new_tokens():
@@ -113,12 +116,18 @@ async def signal_loop():
 # --- Main ---
 if __name__ == "__main__":
     app = ApplicationBuilder().token(TOKEN).build()
+
+    # Komennot
     app.add_handler(CommandHandler("set_hours", set_hours))
     app.add_handler(CommandHandler("set_top_percent", set_top_percent))
     app.add_handler(CommandHandler("status", status))
+    app.add_handler(CommandHandler("test", send_test_message))
 
-    # Käynnistä taustasilmukka ilman DeprecationWarning
-    asyncio.create_task(signal_loop())
+    # Käynnistä taustasilmukka Telegramin event loopin kautta
+    async def start_background(app):
+        asyncio.create_task(signal_loop())
+
+    app.post_init(start_background)
     
-    # Käynnistä Telegram bot polling
+    # Käynnistä polling
     app.run_polling()
