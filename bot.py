@@ -5,15 +5,20 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 import asyncio
 
-# Ympäristömuuttujat
+# ----- Ympäristömuuttujat -----
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
+CHANNEL_ID = os.getenv("CHANNEL_ID")
 
-# Parametrit
+if BOT_TOKEN is None or CHANNEL_ID is None:
+    raise ValueError("BOT_TOKEN tai CHANNEL_ID ei ole määritelty ympäristömuuttujissa!")
+
+CHANNEL_ID = int(CHANNEL_ID)
+
+# ----- Parametrit -----
 hours_window = 1
 top_percent = 5
 
-# Telegram-botin alustus
+# ----- Telegram-botin alustus -----
 app = Application.builder().token(BOT_TOKEN).build()
 
 # ----- Komennot -----
@@ -51,7 +56,7 @@ async def commands_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/status - Näytä nykyiset parametrit\n"
         "/set_hours <tunnit> - Aseta taustasilmukan aikaväli\n"
         "/set_top_percent <prosentti> - Aseta top % arvo\n"
-        "/commands - Näytä tämä listaus\n"
+        "/commands - Näytä tämä lista\n"
     )
     await update.message.reply_text(cmd_list)
 
