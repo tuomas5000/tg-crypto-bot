@@ -48,6 +48,11 @@ async def set_top_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         await update.message.reply_text("⚠️ Käyttö: /set_top_percent <prosentti>")
 
+# Lisätty /commands-komento
+async def commands_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    commands_list = "/test\n/status\n/set_hours\n/set_top_percent"
+    await update.message.reply_text(f"📋 Saatavilla olevat komennot:\n{commands_list}")
+
 # ----- Taustasilmukka -----
 def fetch_new_tokens():
     try:
@@ -89,6 +94,7 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("status", status_command))
     app.add_handler(CommandHandler("set_hours", set_hours_command))
     app.add_handler(CommandHandler("set_top_percent", set_top_command))
+    app.add_handler(CommandHandler("commands", commands_command))  # <- uusi
 
     # Käynnistä taustasäie
     start_background_tasks()
