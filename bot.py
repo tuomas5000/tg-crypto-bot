@@ -119,9 +119,8 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("test", send_test_message))
 
-    # Käynnistä taustasilmukka suoraan nykyisessä loopissa
-    loop = asyncio.get_event_loop()
-    loop.create_task(signal_loop())
+    # Käynnistä taustasilmukka suoraan nykyisessä event loopissa
+    asyncio.get_running_loop().create_task(signal_loop())
 
     # Käynnistä Telegram polling synkronisesti
     app.run_polling()
