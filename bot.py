@@ -12,14 +12,14 @@ SOLSCAN_API_KEY = os.getenv("SOLSCAN_API_KEY")
 HEADERS = {"token": SOLSCAN_API_KEY}
 bot = Bot(token=TOKEN)
 
-# --- Parametrit, joita voi säätää Telegramin kautta ---
+# --- Parametrit ---
 hours = 1
 top_percent = 5  # oletus 5%
 
 SOLSCAN_NEW_TOKENS = "https://public-api.solscan.io/v1/token/new"
 SOLSCAN_TOKEN_TXS = "https://public-api.solscan.io/v1/token/txs"
 
-# --- Komennot Telegramista ---
+# --- Telegram-komennot ---
 async def set_hours(update: ContextTypes.DEFAULT_TYPE, context: ContextTypes.DEFAULT_TYPE):
     global hours
     if context.args:
@@ -42,7 +42,7 @@ async def status(update: ContextTypes.DEFAULT_TYPE, context: ContextTypes.DEFAUL
 async def send_test_message(update: ContextTypes.DEFAULT_TYPE, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("✅ Testiviesti: botti toimii ja Telegram-yhteys OK!")
 
-# --- Hae uudet tokenit ---
+# --- Solscan tokenit ---
 def fetch_new_tokens():
     tokens = []
     try:
@@ -60,7 +60,6 @@ def fetch_new_tokens():
         print(f"Virhe uusien tokenien haussa: {e}")
     return tokens
 
-# --- Laske ostajamäärä tietyn aikavälin sisällä ---
 def count_buyers(token_address, hours_param):
     try:
         params = {"token": token_address, "limit": 100}
@@ -77,7 +76,6 @@ def count_buyers(token_address, hours_param):
         print(f"Virhe ostajien laskennassa: {e}")
         return 0
 
-# --- Lähetä top tokenit Telegramiin ---
 async def send_signal_message():
     tokens = fetch_new_tokens()
     buyer_counts = []
@@ -91,7 +89,6 @@ async def send_signal_message():
         print("Ei ostotietoja tällä kierroksella.")
         return
 
-    # Laske top %
     threshold_index = max(0, int(len(buyer_counts)*(top_percent/100))-1)
     threshold = max(1, sorted(buyer_counts, reverse=True)[threshold_index])
 
@@ -107,11 +104,10 @@ async def send_signal_message():
             except Exception as e:
                 print(f"Virhe viestin lähetyksessä: {e}")
 
-# --- Taustasilmukka 1h välein ---
 async def signal_loop():
     while True:
         await send_signal_message()
-        await asyncio.sleep(3600)
+        await asyncio.sleep(3600)  # 1h välein
 
 # --- Main ---
 if __name__ == "__main__":
@@ -123,11 +119,9 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("status", status))
     app.add_handler(CommandHandler("test", send_test_message))
 
-    # Käynnistä taustasilmukka Telegramin event loopin kautta
-    async def start_background(app):
+    # Käynnistä taustatehtävä event loopissa
+    async def on_startup(app):
         asyncio.create_task(signal_loop())
 
-    app.post_init(start_background)
-    
-    # Käynnistä polling
-    app.run_polling()
+    # Käynnistä polling + taustatehtävä
+    app.run_polling(on_startup=on_startup)
