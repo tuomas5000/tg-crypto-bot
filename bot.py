@@ -89,10 +89,11 @@ def signal_loop():
     while True:
         try:
             tokens = fetch_new_tokens()
+            print("DEBUG: API-vastaus:", tokens)  # 👈 Näet lokista tuleeko mitään
+
             if not tokens:
                 print("Ei uusia tokeneita tällä kierroksella.")
             else:
-                # Lasketaan ostajien määrä jokaiselle tokenille
                 token_info = []
                 for t in tokens:
                     symbol = t.get("symbol", "N/A")
@@ -100,12 +101,10 @@ def signal_loop():
                     holders = fetch_token_holders(address)
                     token_info.append({"symbol": symbol, "address": address, "holders": holders})
 
-                # Järjestä top % ostajien määrän mukaan
                 token_info.sort(key=lambda x: x["holders"], reverse=True)
                 top_count = max(1, len(token_info) * top_percent // 100)
                 top_tokens = token_info[:top_count]
 
-                # Lähetä viesti Telegramiin
                 text = f"📊 Top {top_percent}% uusista tokeneista Solanassa:\n"
                 for t in top_tokens:
                     text += f"- {t['symbol']} ({t['address']}), holders: {t['holders']}\n"
@@ -114,6 +113,7 @@ def signal_loop():
             print("Virhe signal_loopissa:", e)
 
         time.sleep(hours_window * 3600)
+
 
 def start_background_tasks():
     thread = threading.Thread(target=signal_loop, daemon=True)
