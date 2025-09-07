@@ -59,58 +59,85 @@ async def commands_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ----- Taustasilmukka -----
 def fetch_new_tokens():
     try:
-        # Hae uusimmat tokenit SolScan API:sta
-        url = "https://public-api.solscan.io/token/list?sortBy=createdBlock&direction=desc&limit=10"
-        r = requests.get(url, timeout=10)
-        if r.status_code == 200:
-            return r.json()
-        else:
-            print("Virhe uusien tokenien haussa:", r.text)
-            return []
-    except Exception as e:
-        print("Virhe uusien tokenien haussa:", e)
-        return []
-
-def fetch_token_holders(token_address):
-    try:
-        url = f"https://public-api.solscan.io/account/tokens?tokenAddress={token_address}&limit=100"
+        url = "https://api.dexscreener.com/latest/dex/search?q=solana"
         r = requests.get(url, timeout=10)
         if r.status_code == 200:
             data = r.json()
-            # Palautetaan holderien määrä
-            return len(data.get("data", []))
+            return data.get("pairs", [])
         else:
-            return 0
+            error_msg = f"❌ Virhe uusien tokenien haussa (DexScreener): {r.text}"
+            print(error_msg)
+            try:
+                app.bot.send_message(chat_id=CHANNEL_ID, text=error_msg)
+            except Exception as e:
+                print("⚠️ Ei voitu lähettää virheilmoitusta Telegramiin:", e)
+            return []
     except Exception as e:
-        print("Virhe tokenin holderien haussa:", e)
-        return 0
+        error_msg = f"❌ Virhe uusien tokenien haussa: {e}"
+        print(error_msg)
+        try:
+            app.bot.send_message(chat_id=CHANNEL_ID, text=error_msg)
+        except Exception as e2:
+            print("⚠️ Ei voitu lähettää virheilmoitusta Telegramiin:", e2)
+        return []
+
 
 def signal_loop():
     while True:
         try:
             tokens = fetch_new_tokens()
-            print("DEBUG: API-vastaus:", tokens)  # 👈 Näet lokista tuleeko mitään
-
             if not tokens:
-                print("Ei uusia tokeneita tällä kierroksella.")
+                msg = "⚠️ Ei uusia tokeneita tällä kierroksella."
+                print(msg)
+                try:
+                    app.bot.send_message(chat_id=CHANNEL_ID, text=msg)
+                except Exception as e:
+                    print("⚠️ Ei voitu lähettää Telegramiin:", e)
             else:
                 token_info = []
                 for t in tokens:
-                    symbol = t.get("symbol", "N/A")
-                    address = t.get("tokenAddress", "")
-                    holders = fetch_token_holders(address)
-                    token_info.append({"symbol": symbol, "address": address, "holders": holders})
+                    base_token = t.get("baseToken", {})
+                    symbol = base_token.get("symbol", "N/A")
+                    address = base_token.get("address", "")
+                    liquidity = t.get("liquidity", {}).get("usd", 0) or 0
+                    volume24h = t.get("volume", {}).get("h24", 0) or 0
 
-                token_info.sort(key=lambda x: x["holders"], reverse=True)
+                    token_info.append({
+                        "symbol": symbol,
+                        "address": address,
+                        "liquidity": liquidity,
+                        "volume24h": volume24h
+                    })
+
+                token_info.sort(key=lambda x: x["volume24h"], reverse=True)
                 top_count = max(1, len(token_info) * top_percent // 100)
                 top_tokens = token_info[:top_count]
 
-                text = f"📊 Top {top_percent}% uusista tokeneista Solanassa:\n"
+                text = f"📊 Top {top_percent}% Solana-tokeneista DexScreenerin mukaan:\n"
                 for t in top_tokens:
-                    text += f"- {t['symbol']} ({t['address']}), holders: {t['holders']}\n"
-                app.bot.send_message(chat_id=CHANNEL_ID, text=text)
+                    text += (
+                        f"- {t['symbol']} ({t['address']})\n"
+                        f"   💧 Likviditeetti: ${t['liquidity']:.0f}\n"
+                        f"   📈 24h volyymi: ${t['volume24h']:.0f}\n"
+                    )
+
+                try:
+                    app.bot.send_message(chat_id=CHANNEL_ID, text=text)
+                except Exception as e:
+                    error_msg = f"❌ Virhe viestin lähetyksessä Telegramiin: {e}"
+                    print(error_msg)
+                    try:
+                        app.bot.send_message(chat_id=CHANNEL_ID, text=error_msg)
+                    except Exception as e2:
+                        print("⚠️ Ei voitu lähettää virheilmoitusta Telegramiin:", e2)
+
         except Exception as e:
-            print("Virhe signal_loopissa:", e)
+            error_msg = f"❌ Virhe signal_loopissa: {e}"
+            print(error_msg)
+            try:
+                app.bot.send_message(chat_id=CHANNEL_ID, text=error_msg)
+            except Exception as e2:
+                print("⚠️ Ei voitu lähettää virheilmoitusta Telegramiin:", e2)
 
         time.sleep(hours_window * 3600)
 
