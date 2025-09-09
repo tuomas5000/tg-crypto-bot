@@ -107,11 +107,19 @@ async def signal_loop_async():
 # --- Flask Webhook ---
 flask_app = Flask(__name__)
 
-@flask_app.route(WEBHOOK_PATH, methods=["POST"])
-def webhook():
-    data = request.get_json(force=True)
-    update = Update.de_json(data, telegram_app.bot)
-    asyncio.create_task(telegram_app.update_queue.put(update))
+import asyncio
+
+@app.route(f"/{BOT_TOKEN}", methods=["POST"])
+def telegram_webhook():
+    from telegram import Update
+
+    # muunna JSON updateksi
+    update = Update.de_json(request.json, telegram_app.bot)
+
+    # puske queueen event loopissa
+    loop = asyncio.get_event_loop()
+    asyncio.run_coroutine_threadsafe(telegram_app.update_queue.put(update), loop)
+
     return "OK"
 
 # Test endpoint
