@@ -7,6 +7,12 @@ import httpx
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
+from flask import Flask, request
+
+APP_URL = os.getenv("APP_URL")  # esim. https://sunbotinurl.onrender.com
+
+app = Flask(__name__)
+
 # --- Konfiguraatio (ympäristömuuttujat) ---
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHANNEL_ID_ENV = os.environ.get("CHANNEL_ID")
@@ -30,7 +36,8 @@ hours_window = 1.0      # lähetysväli tunteina (float), oletus 1 tunti
 top_percent = 5         # ei tällä yksinkertaisella versiolla käytössä mutta pidetään komennolle
 
 # --- Luo telegram application ---
-telegram_app = Application.builder().token(BOT_TOKEN).build()
+telegram_app = Application.builder().token(BOT_TOKEN).updater(None).build()
+
 
 # ---- Komennot ----
 async def test_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -170,8 +177,11 @@ async def main():
         await telegram_app.shutdown()
         await telegram_app.stop()
 
+@app.route(f"/{BOT_TOKEN}", methods=["POST"])
+def telegram_webhook():
+    update = telegram_app.update_queue_factory().json_to_update(request.json, telegram_app.bot)
+    telegram_app.update_queue.put_nowait(update)
+    return "OK"
+
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        logging.info("KeyboardInterrupt, lopetetaan.")
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
