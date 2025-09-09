@@ -3,16 +3,16 @@ import os
 import asyncio
 import logging
 import httpx
-from flask import Flask, request
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
+from aiohttp import web
 
 # --- Konfiguraatio ---
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHANNEL_ID_ENV = os.environ.get("CHANNEL_ID")
-APP_URL = os.environ.get("APP_URL")  # esim. https://my-app.onrender.com
-WEBHOOK_PATH = os.environ.get("WEBHOOK_PATH", "/webhook")  # oletus /webhook
-PORT = int(os.environ.get("PORT", "5000"))
+APP_URL = os.environ.get("APP_URL")
+WEBHOOK_PATH = os.environ.get("WEBHOOK_PATH", "/webhook")
+PORT = int(os.environ.get("PORT", "8080"))
 
 if not BOT_TOKEN or not CHANNEL_ID_ENV or not APP_URL:
     raise SystemExit("VIRHE: Aseta BOT_TOKEN, CHANNEL_ID ja APP_URL.")
@@ -79,7 +79,7 @@ telegram_app.add_handler(CommandHandler("set_hours", set_hours_command))
 telegram_app.add_handler(CommandHandler("set_top_percent", set_top_command))
 telegram_app.add_handler(CommandHandler("commands", commands_command))
 
-# --- Signaalien haku (esimerkki) ---
+# --- Signaalien haku ---
 async def fetch_new_tokens(limit: int = 20):
     url = f"https://public-api.solscan.io/token/list?sortBy=createdBlock&direction=desc&limit={limit}"
     async with httpx.AsyncClient(timeout=10.0) as client:
@@ -104,36 +104,36 @@ async def signal_loop_async():
                 logging.exception("Virhe viestin lähetyksessä")
         await asyncio.sleep(max(0.1, hours_window) * 3600)
 
-# --- Flask Webhook ---
-flask_app = Flask(__name__)
+# --- Webhook aiohttp ---
+async def telegram_webhook(request):
+    try:
+        data = await request.json()
+    except Exception:
+        return web.Response(status=400, text="Bad request")
+    update = Update.de_json(data, telegram_app.bot)
+    await telegram_app.update_queue.put(update)
+    return web.Response(text="OK")
 
-import asyncio
+async def main():
+    webhook_url = APP_URL.rstrip("/") + WEBHOOK_PATH
+    logging.info("Käynnistetään bot (webhook -> %s) portissa %s", webhook_url, PORT)
 
-@app.route(f"/{BOT_TOKEN}", methods=["POST"])
-def telegram_webhook():
-    from telegram import Update
+    await telegram_app.initialize()
+    await telegram_app.bot.set_webhook(webhook_url, drop_pending_updates=True)
+    await telegram_app.start()
+    asyncio.create_task(signal_loop_async())
 
-    # muunna JSON updateksi
-    update = Update.de_json(request.json, telegram_app.bot)
+    web_app = web.Application()
+    web_app.router.add_post(WEBHOOK_PATH, telegram_webhook)
+    web_app.router.add_get("/", lambda request: web.Response(text="Bot webhook aktiivinen"))
 
-    # puske queueen event loopissa
-    loop = asyncio.get_event_loop()
-    asyncio.run_coroutine_threadsafe(telegram_app.update_queue.put(update), loop)
+    runner = web.AppRunner(web_app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", PORT)
+    await site.start()
 
-    return "OK"
-
-# Test endpoint
-@flask_app.route("/", methods=["GET"])
-def index():
-    return "Bot webhook aktiivinen"
+    stop_event = asyncio.Event()
+    await stop_event.wait()
 
 if __name__ == "__main__":
-    # Asyncio loop Telegramin taustasilmukalle
-    loop = asyncio.get_event_loop()
-    loop.create_task(telegram_app.initialize())
-    loop.create_task(telegram_app.start())
-    loop.create_task(signal_loop_async())
-    # Aseta webhook Telegramiin
-    webhook_url = APP_URL.rstrip("/") + WEBHOOK_PATH
-    loop.run_until_complete(telegram_app.bot.set_webhook(webhook_url, drop_pending_updates=True))
-    flask_app.run(host="0.0.0.0", port=PORT)
+    asyncio.run(main())
